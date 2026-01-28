@@ -15,6 +15,7 @@ const catToPrefix = {
   confectionery: "B",
 };
 
+// Async generator for realtime updates
 async function* realtimeOrdersSimulator() {
   const ids = Object.keys(orders);
   while (true) {
@@ -22,17 +23,24 @@ async function* realtimeOrdersSimulator() {
     const id = ids[Math.floor(Math.random() * ids.length)];
     orders[id].total += delta;
     const { total } = orders[id];
-    yield JSON.stringify({ id, total });
+
+    // Derive category from prefix
+    const category = Object.keys(catToPrefix).find((cat) =>
+      id.startsWith(catToPrefix[cat]),
+    );
+
+    yield { id, total, category, status: "confirmed" };
     await timeout(1500);
   }
 }
 
+// Sync generator for current orders
 function* currentOrders(category) {
   const idPrefix = catToPrefix[category];
   if (!idPrefix) return;
   const ids = Object.keys(orders).filter((id) => id[0] === idPrefix);
   for (const id of ids) {
-    yield JSON.stringify({ id, ...orders[id] });
+    yield { id, ...orders[id], category, status: "confirmed" };
   }
 }
 
@@ -50,6 +58,6 @@ module.exports = fp(async function (fastify, opts) {
     const idPrefix = catToPrefix[category];
     const id = calculateID(idPrefix, data);
     orders[id] = { total: 0 };
-    data.push({ id, ...request.body });
+    data.push({ id, ...request.body, category, status: "pending" });
   });
 });
