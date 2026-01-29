@@ -30,8 +30,13 @@ const add = document.querySelector("#add");
 
 let socket = null;
 const realtimeOrders = (category) => {
-  if (socket) socket.close();
-  socket = new WebSocket(`${WS_API}/orders/${category}`);
+  if (socket === null) {
+    socket = new WebSocket(`${WS_API}/orders/${category}`);
+  } else {
+    socket.send(
+      JSON.stringify({ cmd: "update-category", payload: { category } }),
+    );
+  }
   socket.addEventListener("message", ({ data }) => {
     try {
       const { id, total } = JSON.parse(data);

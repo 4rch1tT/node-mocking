@@ -1,34 +1,38 @@
 "use strict";
-
 module.exports = async function (fastify, opts) {
-  fastify.get("/:category", { websocket: true }, (connection, request) => {
-    const category = request.params.category;
-
-    // Send current orders
-    for (const order of fastify.currentOrders(category)) {
-      connection.send(JSON.stringify(order));
-    }
-
-    // Stream realtime orders
-    (async () => {
-      for await (const order of fastify.realtimeOrders(category)) {
-        if (connection.readyState >= connection.CLOSING) break;
-        try {
-          connection.send(JSON.stringify(order));
-        } catch (err) {
-          console.error("Failed to send order:", err);
-          break;
+  function monitorMessages(socket) {
+    socket.on("message", (data) => {
+      try {
+        const { cmd, payload } = JSON.parse(data);
+        if (cmd === "update-category") {
+          sendCurrentOrders(payload.category, socket);
         }
+      } catch (err) {
+        fastify.log.warn(
+          "WebSocket Message (data: %o) Error: %s",
+          data,
+          err.message,
+        );
       }
-    })();
-
-    // Lifecycle events
-    connection.on("close", (code, reason) => {
-      console.log(`Socket closed: ${code} ${reason}`);
     });
+  }
 
-    connection.on("error", (err) => {
-      console.error("Socket error:", err);
-    });
-  });
+  function sendCurrentOrders(category, socket) {
+    for (const order of fastify.currentOrders(category)) {
+      socket.send(order);
+    }
+  }
+
+  fastify.get(
+    "/:category",
+    { websocket: true },
+    async ({ socket }, request) => {
+      monitorMessages(socket);
+      sendCurrentOrders(request.params.category, socket);
+      for await (const order of fastify.realtimeOrders()) {
+        if (socket.readyState >= socket.CLOSING) break;
+        socket.send(order);
+      }
+    },
+  );
 };
