@@ -1,4 +1,5 @@
 "use strict";
+
 module.exports = async function (fastify, opts) {
   function monitorMessages(socket) {
     socket.on("message", (data) => {
@@ -19,6 +20,7 @@ module.exports = async function (fastify, opts) {
 
   function sendCurrentOrders(category, socket) {
     for (const order of fastify.currentOrders(category)) {
+      fastify.log.info("Sending current order %s", order);
       socket.send(order);
     }
   }
@@ -26,7 +28,8 @@ module.exports = async function (fastify, opts) {
   fastify.get(
     "/:category",
     { websocket: true },
-    async ({ socket }, request) => {
+    async (connection, request) => {
+      const { socket } = connection;
       monitorMessages(socket);
       sendCurrentOrders(request.params.category, socket);
       for await (const order of fastify.realtimeOrders()) {
@@ -35,4 +38,10 @@ module.exports = async function (fastify, opts) {
       }
     },
   );
+
+  fastify.post("/:id", async (request) => {
+    const { id } = request.params;
+    fastify.addOrder(id, request.body.amount);
+    return { ok: true };
+  });
 };
