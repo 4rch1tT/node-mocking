@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import got from "got";
+import minimist from "minimist";
 
 const API = "http://localhost:3000";
 
